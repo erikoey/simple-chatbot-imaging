@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "simple-chatbot-imaging"
+version = "0.1.0"
+description = "Standalone image generation package with pluggable providers, fallback orchestration, and a true async API."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Erik" }]
+dependencies = [
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+huggingface = ["gradio-client>=1.0.0"]
+fallback = []  # orchestration only; install provider extras separately
+all = ["simple-chatbot-imaging[huggingface]"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.26.0",
+    "ruff>=0.12.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/simple_chatbot_imaging"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
