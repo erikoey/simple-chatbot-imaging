@@ -8,6 +8,7 @@ import base64
 import os
 import tempfile
 from pathlib import Path
+from pydantic import SecretStr
 
 import httpx
 
@@ -34,9 +35,9 @@ class OpenRouterImageGenerator(BaseImageGenerator):
         self.request_timeout_seconds = request_timeout_seconds
 
     @property
-    def api_key(self) -> str:
+    def api_key(self) -> SecretStr:
         """Return the OpenRouter API key from the environment."""
-        key = os.getenv(self.api_key_env)
+        key = SecretStr(os.getenv(self.api_key_env, ""))
         if not key:
             raise ImageGenerationError(
                 f"Missing API key: set the {self.api_key_env} environment variable.",
@@ -60,7 +61,7 @@ class OpenRouterImageGenerator(BaseImageGenerator):
 
         url = f"{self.base_url}/generations"
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {self.api_key.get_secret_value()}",
             "Content-Type": "application/json",
         }
         payload = {
@@ -73,6 +74,12 @@ class OpenRouterImageGenerator(BaseImageGenerator):
                 response = await client.post(url, headers=headers, json=payload)
         except httpx.HTTPError as exc:
             raise ImageGenerationError(f"OpenRouter request failed: {exc}") from exc
+
+        if (response.status_code == 400):
+            raise ImageGenerationError(
+                "Prompt was filtered, inappropiate content (400)",
+                retryable=False
+            )
 
         if response.status_code == 401:
             raise ImageGenerationError(

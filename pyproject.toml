@@ -12,6 +12,7 @@ license = "MIT"
 authors = [{ name = "Erik" }]
 dependencies = [
     "httpx>=0.28.0",
+    "pydantic>=2.13.5",
 ]
 
 [project.optional-dependencies]
