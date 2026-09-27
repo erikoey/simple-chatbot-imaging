@@ -23,7 +23,7 @@ def test_factory_missing_extra_clear_error(monkeypatch):
     monkeypatch.setitem(sys.modules, "gradio_client.utils", None)
 
     import importlib
-    import simple_chatbot_imaging.huggingface as hf_mod
+    import simple_chatbot_imaging.providers.huggingface as hf_mod
 
     importlib.reload(hf_mod)
     assert hf_mod.HAS_GRADIO_CLIENT is False
@@ -37,7 +37,7 @@ def test_huggingface_generator_constructible_when_extra_missing(monkeypatch):
     """Construction must not fail; only client use requires the extra."""
     monkeypatch.setitem(sys.modules, "gradio_client", None)
     import importlib
-    import simple_chatbot_imaging.huggingface as hf_mod
+    import simple_chatbot_imaging.providers.huggingface as hf_mod
 
     importlib.reload(hf_mod)
     gen = hf_mod.HuggingFaceImageGenerator(media_path="media_test_hf2")

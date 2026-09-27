@@ -10,6 +10,7 @@ from simple_chatbot_imaging.base import (
     ImageGenerationError,
     ImageGenerationState,
 )
+from simple_chatbot_imaging.config import load_provider_config, merge_provider_kwargs
 from simple_chatbot_imaging.factory import (
     FallbackImageGenerator,
     create_image_generator,
@@ -22,6 +23,8 @@ __all__ = [
     "ImageGenerationError",
     "ImageGenerationState",
     "create_image_generator",
+    "load_provider_config",
+    "merge_provider_kwargs",
     "register_provider",
 ]
 

@@ -40,11 +40,13 @@ class HuggingFaceImageGenerator(BaseImageGenerator):
     def __init__(self,
                  space_id: str = DEFAULT_SPACE_ID,
                  hf_token_env: str = "HUGGINGFACE_ACCESS_TOKEN",
+                 request_timeout_seconds: int = 120,
                  **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.space_id = space_id
         self.hf_token_env = hf_token_env
+        self.request_timeout_seconds = request_timeout_seconds
 
         self._client: Any | None = None
 

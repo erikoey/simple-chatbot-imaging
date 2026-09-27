@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from simple_chatbot_imaging.base import ImageGenerationError
-from simple_chatbot_imaging.openrouter import OpenRouterImageGenerator
+from simple_chatbot_imaging.providers.openrouter import OpenRouterImageGenerator
 
 
 def _b64_png() -> bytes:

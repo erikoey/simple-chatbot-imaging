@@ -29,7 +29,40 @@ Synchronous use:
 path = gen.generate_image("a neon cyberpunk city at night")
 ```
 
-## Providers
+## Provider configuration file
+
+Provider defaults live in [src/simple_chatbot_imaging/providers.json](src/simple_chatbot_imaging/providers.json). You can edit that file to change API endpoints, model IDs, or add your own providers without changing library code.
+
+```json
+{
+  "openrouter": {
+    "kwargs": {
+      "base_url": "https://openrouter.ai/api/v1/images",
+      "model": "meta/muse-image",
+      "api_key_env": "OPENROUTER_API_KEY"
+    }
+  },
+  "custom_provider": {
+    "factory": "your_package.providers:YourCustomProvider",
+    "kwargs": {
+      "base_url": "https://example.com/api/v1/images",
+      "api_key_env": "CUSTOM_API_KEY"
+    }
+  }
+}
+```
+
+You can also pass a custom config path explicitly:
+
+```python
+from simple_chatbot_imaging import create_image_generator
+
+gen = create_image_generator(
+    "openrouter",
+    config_path="./providers.json",
+    base_url="https://example.com/api/v1/images",
+)
+```
 
 ### OpenRouter (`openrouter`)
 

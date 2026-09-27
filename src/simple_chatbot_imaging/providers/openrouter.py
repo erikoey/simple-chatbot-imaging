@@ -77,7 +77,7 @@ class OpenRouterImageGenerator(BaseImageGenerator):
 
         if (response.status_code == 400):
             raise ImageGenerationError(
-                "Prompt was filtered, inappropiate content (400)",
+                "Bad Request or the prompt was filtered, inappropiate content (400)",
                 retryable=False
             )
 
