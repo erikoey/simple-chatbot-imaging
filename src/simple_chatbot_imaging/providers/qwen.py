@@ -11,7 +11,8 @@ from pathlib import Path
 
 import httpx
 
-from simple_chatbot_imaging.base import BaseImageGenerator, ImageGenerationError
+from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
 
 
 class QwenImageGenerator(BaseImageGenerator):
@@ -150,25 +151,21 @@ class QwenImageGenerator(BaseImageGenerator):
             out_w = clamp(scale_to(resolution, ratio_w, ratio_h))
         return f"{out_w}*{out_h}"
 
-    async def _generate_once_async(self,
-                                   prompt: str,
-                                   negative_prompt: str,
-                                   resolution: int,
-                                   aspect_ratio: str,
-                                   steps: int,
-                                   seed: int) -> Path:
+    async def _generate_once_async(self, request: ImageGenerationRequest) -> Path:
         """Call the Qwen generation endpoint and download the resulting image."""
+        from simple_chatbot_imaging.models import ImageGenerationRequest
+
         # Qwen-Image accepts negative_prompt via parameters.negative_prompt
         # (docs: "Set via parameters.negative_prompt"); do not fold it into
         # the prompt text.
         parameters: dict[str, object] = {
             "prompt_extend": self.prompt_extend,
             "watermark": self.watermark,
-            "size": self._size_parameter(resolution, aspect_ratio),
+            "size": self._size_parameter(request.resolution, request.aspect_ratio),
             "n": self.n,
         }
-        if negative_prompt:
-            parameters["negative_prompt"] = negative_prompt
+        if request.negative_prompt:
+            parameters["negative_prompt"] = request.negative_prompt
 
         payload = {
             "model": self.model,
@@ -177,7 +174,7 @@ class QwenImageGenerator(BaseImageGenerator):
                     {
                         "role": "user",
                         "content": [{
-                            "text": prompt,
+                            "text": request.prompt,
                         }],
                     }
                 ]

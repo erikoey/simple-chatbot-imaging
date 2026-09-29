@@ -16,17 +16,53 @@ extras you want in the chain yourself (e.g. `[huggingface]`).
 
 ## Quick start
 
+The recommended API is the `generate(...)` convenience method. It returns an
+`ImageGenerationResult` with the output path and execution metadata:
+
 ```python
 from simple_chatbot_imaging import create_image_generator
 
 gen = create_image_generator("openrouter", media_path="media")
-path = await gen.generate_image_async("a neon cyberpunk city at night")
+result = await gen.generate("a neon cyberpunk city at night")
+print(result.path)          # Path to the saved image
+print(result.attempts)      # attempts made (including retries)
+print(result.duration_seconds)
+```
+
+For typed/batch callers, use the request-first canonical API:
+
+```python
+from simple_chatbot_imaging import ImageGenerationRequest
+
+request = ImageGenerationRequest(
+    prompt="a neon cyberpunk city at night",
+    negative_prompt="blurry, low quality",
+    resolution=1024,
+    aspect_ratio="16:9",
+    filename="city.png",
+)
+result = await gen.generate_image_async(request)
 ```
 
 Synchronous use:
 
 ```python
-path = gen.generate_image("a neon cyberpunk city at night")
+request = ImageGenerationRequest(prompt="a neon cyberpunk city at night")
+result = gen.generate_image(request)
+print(result.path)
+```
+
+### Lifecycle events (optional)
+
+Pass `on_event` to observe the request lifecycle (`QUEUED`, `GENERATING`,
+`RETRYING`, `SAVING`, `SUCCESS`, `ERROR`, `CANCELLED`). Sync and async
+callbacks are both supported; callback failures are logged, never raised:
+
+```python
+def handle_event(event):
+    print(event.status, event.provider_name, event.attempt)
+
+result = await gen.generate("a neon cyberpunk city at night", on_event=handle_event)
 ```
 
 ## Provider configuration file
@@ -94,15 +130,33 @@ fallback only advances to the next provider on failure.
 ## API
 
 - `BaseImageGenerator` — abstract provider base; prompt validation, retries with
-  backoff, timeouts, state tracking, output movement.
-- `generate_image(...)` — synchronous entry point.
-- `generate_image_async(...)` — true async entry point (native async providers).
+  backoff, timeouts, output movement into the media folder.
+- `generate(prompt, **kwargs)` — async convenience method; builds an
+  `ImageGenerationRequest` and returns an `ImageGenerationResult`.
+- `generate_image_async(request, *, on_event=None)` — canonical async entry
+  point; takes an `ImageGenerationRequest`, returns an `ImageGenerationResult`,
+  raises `ImageGenerationError` on failure and propagates
+  `asyncio.CancelledError` when the calling task is cancelled.
+- `generate_image(request, *, on_event=None)` — synchronous bridge over
+  `generate_image_async`; raises `RuntimeError` if called from a running event
+  loop.
+- `ImageGenerationRequest` — frozen dataclass: `prompt`, `negative_prompt`,
+  `resolution`, `aspect_ratio`, `steps`, `seed`, `filename`, `overwrite`.
+- `ImageGenerationResult` — frozen dataclass: `request_id`, `path`,
+  `provider_name`, `model`, `request`, `attempts`, `started_at`,
+  `completed_at`, `duration_seconds`.
+- `ImageGenerationEvent` / `ImageGenerationStatus` — request-local lifecycle
+  events (`QUEUED`, `GENERATING`, `RETRYING`, `SAVING`, `SUCCESS`, `ERROR`,
+  `CANCELLED`) delivered via the optional `on_event` callback.
 - `ImageGenerationError(retryable=...)` — permanent errors (bad key, no credits,
   403/404) are not retried.
-- `ImageGenerationState` — `IDLE`, `GENERATING`, `ERROR`, `SUCCESS`.
 - `create_image_generator(provider, **kwargs)` — factory; raises a clear error
   when an optional provider's extra is not installed.
 - `register_provider(name, factory)` — plugin hook.
+
+Providers implement `async def _generate_once_async(request) -> Path`: one
+provider attempt that returns a locally available image file. The base class
+performs validation, retries, and final placement into the media folder.
 
 ## Environment variables
 

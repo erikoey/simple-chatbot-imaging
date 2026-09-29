@@ -7,7 +7,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from simple_chatbot_imaging.base import ImageGenerationError
+from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
 from simple_chatbot_imaging.providers.openrouter import OpenRouterImageGenerator
 
 
@@ -33,7 +34,7 @@ async def test_missing_api_key(tmp_media, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     gen = OpenRouterImageGenerator(media_path=str(tmp_media))
     with pytest.raises(ImageGenerationError, match="Missing API key"):
-        await gen.generate_image_async("a nice prompt")
+        await gen.generate_image_async(ImageGenerationRequest(prompt="a nice prompt"))
 
 
 async def test_success_png(tmp_media, monkeypatch):
@@ -45,8 +46,8 @@ async def test_success_png(tmp_media, monkeypatch):
         return httpx.Response(200, json={"data": [{"b64_json": _b64_png().decode()}]})
 
     gen = _make_client(monkeypatch, handler, media_path=str(tmp_media))
-    result = await gen.generate_image_async("a nice prompt", filename="or.png")
-    p = Path(result)
+    result = await gen.generate_image_async(ImageGenerationRequest(prompt="a nice prompt", filename="or.png"))
+    p = result.path
     assert p.is_file()
     assert p.read_bytes().startswith(b"\x89PNG")
     assert p.parent.resolve() == tmp_media.resolve()
@@ -61,8 +62,8 @@ async def test_data_url_prefix_stripped(tmp_media, monkeypatch):
         )
 
     gen = _make_client(monkeypatch, handler, media_path=str(tmp_media))
-    result = await gen.generate_image_async("a nice prompt")
-    assert Path(result).read_bytes().startswith(b"\x89PNG")
+    result = await gen.generate_image_async(ImageGenerationRequest(prompt="a nice prompt"))
+    assert result.path.read_bytes().startswith(b"\x89PNG")
 
 
 @pytest.mark.parametrize("status,match", [
@@ -80,7 +81,7 @@ async def test_permanent_errors_no_retry(tmp_media, monkeypatch, status, match):
     gen = _make_client(monkeypatch, handler, media_path=str(tmp_media),
                        retry_attempts=3, retry_delay_seconds=0)
     with pytest.raises(ImageGenerationError, match=match):
-        await gen.generate_image_async("a nice prompt")
+        await gen.generate_image_async(ImageGenerationRequest(prompt="a nice prompt"))
 
 
 async def test_retryable_429_retries_then_fails(tmp_media, monkeypatch):
@@ -94,7 +95,7 @@ async def test_retryable_429_retries_then_fails(tmp_media, monkeypatch):
     gen = _make_client(monkeypatch, handler, media_path=str(tmp_media),
                        retry_attempts=2, retry_delay_seconds=0)
     with pytest.raises(ImageGenerationError, match="rate/quota"):
-        await gen.generate_image_async("a nice prompt")
+        await gen.generate_image_async(ImageGenerationRequest(prompt="a nice prompt"))
     assert calls["n"] == 3
 
 
@@ -106,7 +107,7 @@ async def test_bad_response_format(tmp_media, monkeypatch):
 
     gen = _make_client(monkeypatch, handler, media_path=str(tmp_media))
     with pytest.raises(ImageGenerationError, match="Unexpected OpenRouter response"):
-        await gen.generate_image_async("a nice prompt")
+        await gen.generate_image_async(ImageGenerationRequest(prompt="a nice prompt"))
 
 
 async def test_invalid_base64(tmp_media, monkeypatch):
@@ -117,4 +118,4 @@ async def test_invalid_base64(tmp_media, monkeypatch):
 
     gen = _make_client(monkeypatch, handler, media_path=str(tmp_media))
     with pytest.raises(ImageGenerationError, match="invalid base64"):
-        await gen.generate_image_async("a nice prompt")
+        await gen.generate_image_async(ImageGenerationRequest(prompt="a nice prompt"))

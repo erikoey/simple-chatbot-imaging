@@ -12,7 +12,8 @@ from pydantic import SecretStr
 
 import httpx
 
-from simple_chatbot_imaging.base import BaseImageGenerator, ImageGenerationError
+from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
 
 
 class OpenRouterImageGenerator(BaseImageGenerator):
@@ -45,14 +46,24 @@ class OpenRouterImageGenerator(BaseImageGenerator):
             )
         return key
 
-    async def _generate_once_async(self,
-                                   prompt: str,
-                                   negative_prompt: str,
-                                   resolution: int,
-                                   aspect_ratio: str,
-                                   steps: int,
-                                   seed: int) -> Path:
-        """Call the OpenRouter image API once and save the result to a temp file."""
+    async def _generate_once_async(
+        self,
+        request: ImageGenerationRequest,
+        *,
+        prompt: str | None = None,
+        negative_prompt: str | None = None,
+        resolution: int | None = None,
+        aspect_ratio: str | None = None,
+        steps: int | None = None,
+        seed: int | None = None,
+    ) -> Path:
+        """Call the OpenRouter image API once and save the result to a temp file.
+
+        Accepts both positional (ImageGenerationRequest) and keyword arguments
+        to support calls from FallbackImageGenerator which passes kwargs directly.
+        """
+        if prompt is None:
+            prompt = request.prompt
         # OpenRouter's image API does not support negative prompts, steps,
         # seeds, or aspect ratios; fold the negative prompt into the prompt
         # as guidance and ignore the remaining parameters.
@@ -107,11 +118,13 @@ class OpenRouterImageGenerator(BaseImageGenerator):
         if response.status_code == 429:
             # Rate limit or quota exhausted; retrying after a delay may help.
             raise ImageGenerationError(
-                "OpenRouter rate/quota limit hit (429). Try again shortly."
+                "OpenRouter rate/quota limit hit (429). Try again shortly.",
+                retryable=True,
             )
         if response.status_code >= 500:
             raise ImageGenerationError(
-                f"OpenRouter server error ({response.status_code}). Try again shortly."
+                f"OpenRouter server error ({response.status_code}). Try again shortly.",
+                retryable=True,
             )
         if response.status_code != 200:
             raise ImageGenerationError(

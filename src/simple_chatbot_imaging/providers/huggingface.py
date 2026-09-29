@@ -12,7 +12,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from simple_chatbot_imaging.base import BaseImageGenerator, ImageGenerationError
+from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
 
 if TYPE_CHECKING:
     from gradio_client import Client
@@ -80,23 +81,19 @@ class HuggingFaceImageGenerator(BaseImageGenerator):
         """Print the space API, for debug purposes only."""
         self.client.view_api()
 
-    def _submit_and_wait(self,
-                         prompt: str,
-                         negative_prompt: str,
-                         resolution: int,
-                         aspect_ratio: str,
-                         steps: int,
-                         seed: int) -> Path:
+    def _submit_and_wait(self, request: ImageGenerationRequest) -> Path:
         """Synchronous Gradio call; runs in a worker thread via to_thread."""
+        from simple_chatbot_imaging.models import ImageGenerationRequest
+
         # predict(prompt, input_images, negative_prompt, true_cfg_scale,
         #         num_inference_steps, seed, resolution, aspect_ratio, api_name="/generate")
         job = self.client.submit(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            num_inference_steps=steps,
-            seed=seed if seed > 0 else random.randint(1, 999999),
-            resolution=resolution,
-            aspect_ratio=aspect_ratio,
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            num_inference_steps=request.steps if request.steps is not None else 40,
+            seed=request.seed if request.seed and request.seed > 0 else random.randint(1, 999999),
+            resolution=request.resolution,
+            aspect_ratio=request.aspect_ratio,
             api_name="/generate",
         )
 
@@ -154,20 +151,9 @@ class HuggingFaceImageGenerator(BaseImageGenerator):
             if job and not job.done():
                 job.cancel()
 
-    async def _generate_once_async(self,
-                                   prompt: str,
-                                   negative_prompt: str,
-                                   resolution: int,
-                                   aspect_ratio: str,
-                                   steps: int,
-                                   seed: int) -> Path:
+    async def _generate_once_async(self, request: ImageGenerationRequest) -> Path:
         """Run a single generation job on the HF space without blocking the loop."""
         return await asyncio.to_thread(
             self._submit_and_wait,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            resolution=resolution,
-            aspect_ratio=aspect_ratio,
-            steps=steps,
-            seed=seed,
+            request=request,
         )

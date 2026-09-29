@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from simple_chatbot_imaging.base import ImageGenerationError
+from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.models import ImageGenerationError
 from simple_chatbot_imaging.config import load_provider_config
 from simple_chatbot_imaging.factory import (
     FallbackImageGenerator,
@@ -87,11 +88,11 @@ def test_qwen_provider_downloads_image_url(tmp_path, monkeypatch):
     gen = create_image_generator("qwen", media_path=str(tmp_path))
     assert gen.base_url.endswith("/generation")
 
-    path = asyncio.run(gen.generate_image_async(
+    path = asyncio.run(gen.generate(
         "A neon fox in the rain",
         negative_prompt="blurry, low quality",
-    ))
-    assert Path(path).is_file()
+    )).path
+    assert path.is_file()
 
 
 def test_qwen_provider_passes_negative_prompt_in_parameters(tmp_path, monkeypatch):
@@ -141,7 +142,7 @@ def test_qwen_provider_passes_negative_prompt_in_parameters(tmp_path, monkeypatc
     monkeypatch.setattr("simple_chatbot_imaging.providers.qwen.httpx.AsyncClient", FakeAsyncClient)
 
     gen = create_image_generator("qwen", media_path=str(tmp_path))
-    asyncio.run(gen.generate_image_async(
+    asyncio.run(gen.generate(
         "A red sports car",
         negative_prompt="low resolution, distorted limbs",
         resolution=2048,
@@ -178,8 +179,8 @@ async def test_fallback_first_success_wins(tmp_media, sample_png):
     first = FakeImageGenerator(results=[sample_png], media_path=str(tmp_media))
     second = FakeImageGenerator(media_path=str(tmp_media))
     fb = FallbackImageGenerator(generators=[first, second], media_path=str(tmp_media))
-    result = await fb.generate_image_async("a nice prompt", filename="fb.png")
-    assert Path(result).is_file()
+    result = await fb.generate("a nice prompt", filename="fb.png")
+    assert result.path.is_file()
     assert fb.last_backend == first.provider_name
     assert second.calls == 0
 
@@ -190,8 +191,8 @@ async def test_fallback_advances_on_failure(tmp_media, sample_png):
                                retry_attempts=2, retry_delay_seconds=0)
     second = FakeImageGenerator(results=[sample_png], media_path=str(tmp_media))
     fb = FallbackImageGenerator(generators=[first, second], media_path=str(tmp_media))
-    result = await fb.generate_image_async("a nice prompt", filename="fb.png")
-    assert Path(result).is_file()
+    result = await fb.generate("a nice prompt", filename="fb.png")
+    assert result.path.is_file()
     assert fb.last_backend == second.provider_name
     assert first.calls == 3  # full retry lifecycle ran inside the provider
 
@@ -204,4 +205,4 @@ async def test_fallback_all_fail(tmp_media):
     ]
     fb = FallbackImageGenerator(generators=providers, media_path=str(tmp_media))
     with pytest.raises(ImageGenerationError, match="All image providers failed"):
-        await fb.generate_image_async("a nice prompt")
+        await fb.generate("a nice prompt")

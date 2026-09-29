@@ -5,7 +5,8 @@ import types
 
 import pytest
 
-from simple_chatbot_imaging.base import ImageGenerationError
+from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.models import ImageGenerationError
 from simple_chatbot_imaging.factory import create_image_generator
 
 

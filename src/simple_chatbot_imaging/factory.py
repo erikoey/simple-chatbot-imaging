@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import Callable
 import importlib
 
-from simple_chatbot_imaging.base import (
-    BaseImageGenerator,
+from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.models import (
     ImageGenerationError,
+    ImageGenerationRequest,
     ImageGenerationState,
 )
 from simple_chatbot_imaging.config import _load_factory_from_config, merge_provider_kwargs
@@ -136,12 +137,7 @@ class FallbackImageGenerator(BaseImageGenerator):
         return "Fallback"
 
     async def _generate_once_async(self,
-                                   prompt: str,
-                                   negative_prompt: str,
-                                   resolution: int,
-                                   aspect_ratio: str,
-                                   steps: int,
-                                   seed: int) -> Path:
+                                   request: ImageGenerationRequest) -> Path:
         """Try each generator in the chain; return the first successful result.
 
         Each generator's public async entry point is used so retries, state
@@ -154,17 +150,19 @@ class FallbackImageGenerator(BaseImageGenerator):
         for generator in self.generators:
             try:
                 result = await generator.generate_image_async(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt,
-                    resolution=resolution,
-                    aspect_ratio=aspect_ratio,
-                    steps=steps,
-                    seed=seed,
-                    filename=f"fallback_{generator.provider_name}.png",
+                    ImageGenerationRequest(
+                        prompt=request.prompt,
+                        negative_prompt=request.negative_prompt,
+                        resolution=request.resolution,
+                        aspect_ratio=request.aspect_ratio,
+                        steps=request.steps,
+                        seed=request.seed,
+                        filename=f"fallback_{generator.provider_name}.png",
+                    )
                 )
                 self.last_backend = generator.provider_name
                 print(f"[Fallback] image generated via {generator.provider_name}")
-                return Path(result)
+                return Path(result.path)
             except (ImageGenerationError, ValueError) as exc:
                 errors.append(f"{generator.provider_name}: {exc}")
                 print(f"[Fallback] {generator.provider_name} failed: {exc}")
