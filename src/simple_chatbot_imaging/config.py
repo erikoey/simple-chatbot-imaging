@@ -22,8 +22,8 @@ DEFAULT_PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
     },
     "huggingface": {
         "kwargs": {
-            "space_id": "hugging-apps/qwen-image-2-1",
-            "hf_token_env": "HUGGINGFACE_ACCESS_TOKEN",
+            "model": "hugging-apps/qwen-image-2-1",
+            "api_key_env": "HUGGINGFACE_ACCESS_TOKEN",
         }
     },
     "qwen": {
@@ -67,19 +67,6 @@ def load_provider_config(config_path: str | Path | None = None) -> dict[str, dic
         raise ValueError("Provider config must be a JSON object at the top level.")
 
     return _deep_merge(config_obj, loaded)
-
-
-def merge_provider_kwargs(
-    provider: str,
-    config_path: str | Path | None = None,
-    **kwargs: Any,
-) -> dict[str, Any]:
-    """Merge provider-level configuration with explicit constructor kwargs."""
-    provider_name = provider.lower()
-    settings = load_provider_config(config_path).get(provider_name, {})
-    provider_kwargs = copy.deepcopy(settings.get("kwargs", {}))
-    provider_kwargs.update(kwargs)
-    return provider_kwargs
 
 
 def _load_factory_from_config(provider_name: str, provider_config: Mapping[str, Any]) -> Any:

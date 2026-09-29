@@ -9,8 +9,8 @@
   },
   "huggingface": {
     "kwargs": {
-      "space_id": "hugging-apps/qwen-image-2-1",
-      "hf_token_env": "HUGGINGFACE_ACCESS_TOKEN",
+      "model": "hugging-apps/qwen-image-2-1",
+      "api_key_env": "HUGGINGFACE_ACCESS_TOKEN",
       "request_timeout_seconds" : 120
     }
   },

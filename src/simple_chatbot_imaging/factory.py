@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from simple_chatbot_imaging.base import BaseImageGenerator
-from simple_chatbot_imaging.config import _load_factory_from_config, merge_provider_kwargs
+from simple_chatbot_imaging.config import _load_factory_from_config, load_provider_config
 from simple_chatbot_imaging.models import (
     ImageGenerationError,
     ImageGenerationRequest,
@@ -13,25 +13,6 @@ from simple_chatbot_imaging.models import (
 #: Registry of known provider factories. Values are lazy loaders so that
 #: importing this module never pulls in optional dependencies.
 PROVIDERS: dict[str, Callable[..., BaseImageGenerator]] = {}
-
-
-def _load_provider_factory(name: str, config_path: str | Path | None = None) -> Callable[..., BaseImageGenerator]:
-    """Resolve a provider factory from the built-in registry or custom config."""
-    provider_name = name.lower()
-    if provider_name in PROVIDERS:
-        return PROVIDERS[provider_name]
-
-    config = __import__("simple_chatbot_imaging.config", fromlist=["load_provider_config"]).load_provider_config(config_path)
-    if provider_name not in config:
-        raise ValueError(f"Unknown image provider '{provider_name}'")
-
-    provider_config = config[provider_name]
-    if "factory" not in provider_config:
-        raise ValueError(f"Provider '{provider_name}' is not configured with a factory entry.")
-
-    factory = _load_factory_from_config(provider_name, provider_config)
-    PROVIDERS[provider_name] = factory
-    return factory
 
 
 def _load_openrouter(**kwargs) -> BaseImageGenerator:
@@ -87,16 +68,17 @@ def create_image_generator(
         ImageGenerationError: If an optional provider's extra is missing.
     """
     provider = provider.lower()
+    config = load_provider_config(config_path)
+    provider_config = config.get(provider, {})
 
     if provider in PROVIDERS:
         factory = PROVIDERS[provider]
     else:
-        config = __import__("simple_chatbot_imaging.config", fromlist=["load_provider_config"]).load_provider_config(config_path)
         if provider not in config:
             known = ", ".join(sorted(set(PROVIDERS) | set(config)))
             raise ValueError(f"Unknown image provider '{provider}'. Known providers: {known}")
 
-        provider_cfg = config[provider]
+        provider_cfg = provider_config
         if "factory" in provider_cfg:
             factory = _load_factory_from_config(provider, provider_cfg)
             PROVIDERS[provider] = factory
@@ -106,8 +88,7 @@ def create_image_generator(
                 known = ", ".join(sorted(set(PROVIDERS) | set(config)))
                 raise ValueError(f"Unknown image provider '{provider}'. Known providers: {known}")
 
-    merged_kwargs = merge_provider_kwargs(provider, config_path, **kwargs)
-    return factory(**merged_kwargs)
+    return factory(**{**provider_config.get("kwargs", {}), **kwargs})
 
 
 class FallbackImageGenerator(BaseImageGenerator):

@@ -32,21 +32,30 @@ except ImportError:  # pragma: no cover - exercised via lazy factory error
     _QueueError = None  # type: ignore[assignment]
     HAS_GRADIO_CLIENT = False
 
+HUGGING_FACE_BASE_URL = "hugging-apps"
+
 
 class HuggingFaceImageGenerator(BaseImageGenerator):
     """Generate images through a Hugging Face Gradio space (ZeroGPU)."""
 
+
     DEFAULT_SPACE_ID = "hugging-apps/qwen-image-2-1"
 
     def __init__(self,
-                 space_id: str = DEFAULT_SPACE_ID,
-                 hf_token_env: str = "HUGGINGFACE_ACCESS_TOKEN",
+                 model: str = DEFAULT_SPACE_ID,     # model is Space id here
+                 base_url: str = HUGGING_FACE_BASE_URL,
+                 api_key_env: str = "",
                  request_timeout_seconds: int = 120,
                  **kwargs) -> None:
+        """Important: 
+            @param model is with Hugging Spaces the space_id
+            @param base_url, will be ignored as it is fixed in the gradio client
+        """
+        
         super().__init__(**kwargs)
 
-        self.space_id = space_id
-        self.hf_token_env = hf_token_env
+        self.space_id = model
+        self.hf_token_env = api_key_env
         self.request_timeout_seconds = request_timeout_seconds
 
         self._client: Any | None = None

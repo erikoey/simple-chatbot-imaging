@@ -30,6 +30,18 @@ def _make_client(monkeypatch, handler, **gen_kwargs):
     return gen
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://openrouter.ai/api/v1/images",
+        "https://openrouter.ai/api/v1/images/generations",
+    ],
+)
+def test_endpoint_appends_generations_only_once(base_url):
+    gen = OpenRouterImageGenerator(base_url=base_url)
+    assert gen._endpoint == "https://openrouter.ai/api/v1/images/generations"
+
+
 async def test_missing_api_key(tmp_media, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     gen = OpenRouterImageGenerator(media_path=str(tmp_media))

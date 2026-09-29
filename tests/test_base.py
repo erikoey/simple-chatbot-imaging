@@ -134,7 +134,11 @@ class TestSuccessPath:
         assert result.request_id is not None
         assert result.provider_name == "FakeImageGenerator"
         assert result.attempts >= 1
-        assert result.duration_seconds > 0
+        # Allow for float rounding in timestamp conversion.
+        assert result.duration_seconds == pytest.approx(
+            (result.completed_at - result.started_at).total_seconds(),
+            abs=1e-6,
+        )
         # Verify request was normalized in result
         assert result.request.prompt == "a nice prompt"
         assert result.request.resolution == 2048

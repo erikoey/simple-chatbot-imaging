@@ -6,7 +6,7 @@ providers with :class:`FallbackImageGenerator` (opt-in, caller-defined chain).
 """
 
 from simple_chatbot_imaging.base import BaseImageGenerator
-from simple_chatbot_imaging.config import load_provider_config, merge_provider_kwargs
+from simple_chatbot_imaging.config import load_provider_config
 from simple_chatbot_imaging.factory import (
     FallbackImageGenerator,
     create_image_generator,
@@ -34,7 +34,6 @@ __all__ = [
     "ImageGenerationStatus",
     "create_image_generator",
     "load_provider_config",
-    "merge_provider_kwargs",
     "register_provider",
 ]
 

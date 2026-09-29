@@ -155,7 +155,8 @@ class BaseHTTPImageGenerator(BaseImageGenerator):
             )
         if response.status_code == 404:
             raise ImageGenerationError(
-                f"{label} model not found (404): {self.model}",
+                f"{label} model not found or endpoint unavailable (404) at {response.request.url}: "
+                f"{response.text[:300]}",
                 retryable=False,
             )
         if response.status_code == 429:

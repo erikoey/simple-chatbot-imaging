@@ -28,18 +28,21 @@ class OpenRouterImageGenerator(BaseHTTPImageGenerator):
                  api_key_env: str = DEFAULT_API_KEY_ENV,
                  request_timeout_seconds: int = 120,
                  **kwargs) -> None:
-        super().__init__(
-            model=model,
-            base_url=base_url,
-            api_key_env=api_key_env,
-            request_timeout_seconds=request_timeout_seconds,
-            **kwargs,
-        )
+        
+        super().__init__(model=model,
+                         base_url=base_url,
+                         api_key_env=api_key_env,
+                         request_timeout_seconds=request_timeout_seconds,
+                         **kwargs,
+                         )
 
     @property
     def _endpoint(self) -> str:
-        """OpenRouter appends /generations to the configured base URL."""
-        return f"{self.base_url}/generations"
+        """Return the generations endpoint for either a base URL or full URL."""
+        suffix = "/generations"
+        if self.base_url.endswith(suffix):
+            return self.base_url
+        return f"{self.base_url}{suffix}"
 
     def _build_payload(self, request: ImageGenerationRequest) -> dict[str, Any]:
         prompt = request.prompt

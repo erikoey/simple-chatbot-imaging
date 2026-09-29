@@ -72,6 +72,18 @@ def test_raise_for_status_mapping(status, match, retryable):
     assert excinfo.value.retryable is retryable
 
 
+def test_404_includes_endpoint_and_provider_response():
+    gen = SimpleHTTPGenerator(model="my-model", media_path="media_test_http")
+    request = httpx.Request("POST", "https://api.example.com/wrong-route")
+    response = httpx.Response(404, text="route does not exist", request=request)
+
+    with pytest.raises(ImageGenerationError, match="model not found or endpoint unavailable") as excinfo:
+        gen._raise_for_status(response)
+
+    assert "https://api.example.com/wrong-route" in str(excinfo.value)
+    assert "route does not exist" in str(excinfo.value)
+
+
 def test_sniff_suffix_from_content_type():
     assert BaseHTTPImageGenerator._sniff_suffix(b"", "image/jpeg; charset=binary") == ".jpg"
     assert BaseHTTPImageGenerator._sniff_suffix(b"", "image/png") == ".png"
