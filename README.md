@@ -103,10 +103,3 @@ fallback only advances to the next provider on failure.
 - `create_image_generator(provider, **kwargs)` — factory; raises a clear error
   when an optional provider's extra is not installed.
 - `register_provider(name, factory)` — plugin hook.
-
-## Environment variables
-
-| Variable | Provider | Required |
-|---|---|---|
-| `OPENROUTER_API_KEY` | openrouter | yes |
-| `HUGGINGFACE_ACCESS_TOKEN` | huggingface | no (recommended for ZeroGPU spaces) |
