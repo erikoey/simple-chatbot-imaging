@@ -153,14 +153,3 @@ fallback only advances to the next provider on failure.
 - `create_image_generator(provider, **kwargs)` — factory; raises a clear error
   when an optional provider's extra is not installed.
 - `register_provider(name, factory)` — plugin hook.
-
-Providers implement `async def _generate_once_async(request) -> Path`: one
-provider attempt that returns a locally available image file. The base class
-performs validation, retries, and final placement into the media folder.
-
-## Environment variables
-
-| Variable | Provider | Required |
-|---|---|---|
-| `OPENROUTER_API_KEY` | openrouter | yes |
-| `HUGGINGFACE_ACCESS_TOKEN` | huggingface | no (recommended for ZeroGPU spaces) |
