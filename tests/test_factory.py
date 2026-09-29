@@ -1,20 +1,17 @@
 """Tests for the factory and opt-in fallback orchestration."""
 
 import asyncio
-from pathlib import Path
 
 import pytest
 
-from simple_chatbot_imaging.base import BaseImageGenerator
-from simple_chatbot_imaging.models import ImageGenerationError
+from conftest import FakeImageGenerator
 from simple_chatbot_imaging.config import load_provider_config
 from simple_chatbot_imaging.factory import (
     FallbackImageGenerator,
     create_image_generator,
     register_provider,
 )
-
-from conftest import FakeImageGenerator
+from simple_chatbot_imaging.models import ImageGenerationError
 
 
 def test_unknown_provider_raises():
@@ -83,7 +80,7 @@ def test_qwen_provider_downloads_image_url(tmp_path, monkeypatch):
             return FakeResponse(content=b"\x89PNG\r\n\x1a\n" + b"0" * 16)
 
     monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
-    monkeypatch.setattr("simple_chatbot_imaging.providers.qwen.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("simple_chatbot_imaging.providers.http_base.httpx.AsyncClient", FakeAsyncClient)
 
     gen = create_image_generator("qwen", media_path=str(tmp_path))
     assert gen.base_url.endswith("/generation")
@@ -139,7 +136,7 @@ def test_qwen_provider_passes_negative_prompt_in_parameters(tmp_path, monkeypatc
             return FakeResponse(content=b"\x89PNG\r\n\x1a\n" + b"0" * 16)
 
     monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
-    monkeypatch.setattr("simple_chatbot_imaging.providers.qwen.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("simple_chatbot_imaging.providers.http_base.httpx.AsyncClient", FakeAsyncClient)
 
     gen = create_image_generator("qwen", media_path=str(tmp_path))
     asyncio.run(gen.generate(

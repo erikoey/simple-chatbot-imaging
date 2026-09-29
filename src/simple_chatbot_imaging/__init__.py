@@ -17,19 +17,21 @@ from simple_chatbot_imaging.models import (
     ImageGenerationEvent,
     ImageGenerationRequest,
     ImageGenerationResult,
-    ImageGenerationStatus,
     ImageGenerationState,
+    ImageGenerationStatus,
 )
+from simple_chatbot_imaging.providers.http_base import BaseHTTPImageGenerator
 
 __all__ = [
+    "BaseHTTPImageGenerator",
     "BaseImageGenerator",
     "FallbackImageGenerator",
     "ImageGenerationError",
     "ImageGenerationEvent",
     "ImageGenerationRequest",
     "ImageGenerationResult",
-    "ImageGenerationStatus",
     "ImageGenerationState",
+    "ImageGenerationStatus",
     "create_image_generator",
     "load_provider_config",
     "merge_provider_kwargs",

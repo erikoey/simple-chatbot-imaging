@@ -113,6 +113,42 @@ gen = create_image_generator(
 - Uses `HUGGINGFACE_ACCESS_TOKEN` if set.
 - Options: `space_id` (default `hugging-apps/qwen-image-2-1`), `hf_token_env`.
 
+## Custom HTTP providers
+
+OpenRouter and Qwen share a common base class,
+`BaseHTTPImageGenerator` (exported from the package root). It owns the full
+JSON-over-HTTP pipeline — Bearer auth from an environment variable
+(`SecretStr`), POST request, HTTP status mapping (401/402/403/404/429/5xx with
+appropriate retryability), and temp-file handling.
+
+The base also decides **how to obtain the image** from a response, in this
+order:
+
+1. `image/*` response content-type — the body itself is the image.
+2. A base64 field (`b64_json`, `b64`, `base64`, `image_base64`) anywhere in the
+   JSON — decoded (data-URL prefixes are stripped).
+3. A URL field (`url`, `image_url`, `imageUrl`, `image`, `output_url`) anywhere
+   in the JSON — downloaded with redirects.
+
+Field names are class attributes (`BASE64_FIELDS` / `URL_FIELDS`), so a custom
+provider only needs to implement `_build_payload` and set `provider_label`,
+endpoint, and defaults — or extend the field tuples for exotic API shapes:
+
+```python
+from simple_chatbot_imaging import BaseHTTPImageGenerator
+
+class MyProviderImageGenerator(BaseHTTPImageGenerator):
+    provider_label = "MyProvider"
+    DEFAULT_BASE_URL = "https://api.example.com/v1/images"
+    DEFAULT_MODEL = "example-image"
+    DEFAULT_API_KEY_ENV = "EXAMPLE_API_KEY"
+
+    def _build_payload(self, request):
+        return {"model": self.model, "prompt": request.prompt}
+```
+
+Then register it: `register_provider("example", MyProviderImageGenerator)`.
+
 ## Fallback (opt-in)
 
 Fallback is never implicit. Build it explicitly with a caller-defined chain:

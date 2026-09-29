@@ -457,17 +457,9 @@ class BaseImageGenerator(ABC):
         )
 
     @abstractmethod
-    async def _generate_once_async(
-        self,
-        request: ImageGenerationRequest,
-        *,
-        prompt: str | None = None,
-        negative_prompt: str | None = None,
-        resolution: int | None = None,
-        aspect_ratio: str | None = None,
-        steps: int | None = None,
-        seed: int | None = None,
-    ) -> Path:
+    async def _generate_once_async(self,
+                                   request: ImageGenerationRequest
+                                   ) -> Path:
         """Perform exactly one provider attempt and return a local image file.
 
         The returned path must be a regular file. The provider must clean up its

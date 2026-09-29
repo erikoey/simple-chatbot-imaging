@@ -1,16 +1,14 @@
 """Provider registry, factory, and opt-in fallback orchestration."""
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
-import importlib
 
 from simple_chatbot_imaging.base import BaseImageGenerator
+from simple_chatbot_imaging.config import _load_factory_from_config, merge_provider_kwargs
 from simple_chatbot_imaging.models import (
     ImageGenerationError,
     ImageGenerationRequest,
-    ImageGenerationState,
 )
-from simple_chatbot_imaging.config import _load_factory_from_config, merge_provider_kwargs
 
 #: Registry of known provider factories. Values are lazy loaders so that
 #: importing this module never pulls in optional dependencies.
@@ -136,8 +134,7 @@ class FallbackImageGenerator(BaseImageGenerator):
     def provider_name(self) -> str:
         return "Fallback"
 
-    async def _generate_once_async(self,
-                                   request: ImageGenerationRequest) -> Path:
+    async def _generate_once_async(self, request: ImageGenerationRequest) -> Path:
         """Try each generator in the chain; return the first successful result.
 
         Each generator's public async entry point is used so retries, state
