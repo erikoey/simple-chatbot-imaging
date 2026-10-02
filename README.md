@@ -161,7 +161,42 @@ gen = FallbackImageGenerator(generators=providers)
 ```
 
 Each provider runs its full lifecycle (retries, state, output movement); the
-fallback only advances to the next provider on failure.
+fallback only advances to the next provider on failure. The winning provider's
+cost information is propagated to the fallback result.
+
+## Cost reporting
+
+If a provider response contains usage/cost information, it is surfaced on the
+result:
+
+```python
+result = await gen.generate_image_async(request)
+if result.cost:
+    print(result.cost.total_amount, result.cost.currency)   # e.g. 0.04 USD
+    print(result.cost.total_credits, result.cost.total_tokens)
+    print(result.cost.image_count, result.cost.per_image_amounts)
+print(result.raw_response_json)  # full provider JSON response, for custom parsing
+```
+
+Semantics:
+
+- `None` fields mean the provider did not report that information (unknown,
+  not free). A provider response without any cost info yields
+  `result.cost is None`.
+- `0` means explicitly free: the Hugging Face provider always reports a zero
+  cost (excluded from cost parsing for now).
+- Reported units may be credits, actual currency (with `currency` code), and
+  or tokens — several at once. Per-image breakdowns are included only when
+  the response provides them.
+- OpenRouter reports `usage.cost` in USD; Qwen (DashScope) reports only an
+  image count.
+- `raw_response_json` holds the complete provider JSON response string so you
+  can process provider-specific fields yourself; note it can be large for
+  responses that embed base64 image data.
+- Custom `BaseHTTPImageGenerator` providers get generic extraction for free
+  (`usage`/`billing` keys with `cost`, `credits*`, `total_tokens`,
+  `image_count`, per-image lists); override `_extract_cost(parsed)` for
+  exotic response shapes.
 
 ## API
 
@@ -180,10 +215,20 @@ fallback only advances to the next provider on failure.
   `resolution`, `aspect_ratio`, `steps`, `seed`, `filename`, `overwrite`.
 - `ImageGenerationResult` — frozen dataclass: `request_id`, `path`,
   `provider_name`, `model`, `request`, `attempts`, `started_at`,
-  `completed_at`, `duration_seconds`.
+  `completed_at`, `duration_seconds`, `cost`, `raw_response_json`.
 - `ImageGenerationEvent` / `ImageGenerationStatus` — request-local lifecycle
   events (`QUEUED`, `GENERATING`, `RETRYING`, `SAVING`, `SUCCESS`, `ERROR`,
   `CANCELLED`) delivered via the optional `on_event` callback.
+- `ImageGenerationCost` — frozen dataclass with what the provider reported:
+  `total_credits`, `total_amount` + `currency`, `total_tokens`,
+  `image_count`, per-image breakdowns (`per_image_credits`,
+  `per_image_amounts`, `per_image_tokens`) and `raw_usage` (the provider's
+  usage object verbatim). `None` fields mean *not reported*; `0` means
+  *free* — the Hugging Face provider always reports zero. `SUCCESS` events
+  carry the same `cost` and `raw_response_json` fields.
+- `ImageGenerationAttempt` — what a provider attempt returns: `path`, `cost`,
+  `raw_response_json`; used when writing custom providers (returning a bare
+  `Path` is still supported and simply reports no cost).
 - `ImageGenerationError(retryable=...)` — permanent errors (bad key, no credits,
   403/404) are not retried.
 - `create_image_generator(provider, **kwargs)` — factory; raises a clear error

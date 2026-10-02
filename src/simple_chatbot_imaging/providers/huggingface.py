@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from simple_chatbot_imaging.base import BaseImageGenerator
-from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
+from simple_chatbot_imaging.models import (
+    ImageGenerationAttempt,
+    ImageGenerationCost,
+    ImageGenerationError,
+    ImageGenerationRequest,
+)
 
 if TYPE_CHECKING:
     from gradio_client import Client
@@ -131,7 +136,13 @@ class HuggingFaceImageGenerator(BaseImageGenerator):
                     f"HF API did not return a local downloaded image file: {result!r}"
                 )
 
-            return img_path
+            # Hugging Face Spaces are excluded from cost reporting: always
+            # report an explicitly free generation (0 credits, 0 amount,
+            # 0 tokens) for the single image the space produced.
+            return ImageGenerationAttempt(
+                path=img_path,
+                cost=ImageGenerationCost.zero(image_count=1),
+            )
 
         except TimeoutError as exc:
             raise ImageGenerationError(f"HF image generation failed: {exc}") from exc

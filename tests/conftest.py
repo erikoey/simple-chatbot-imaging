@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from simple_chatbot_imaging.base import BaseImageGenerator
-from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
+from simple_chatbot_imaging.models import (
+    ImageGenerationAttempt,
+    ImageGenerationError,
+    ImageGenerationRequest,
+)
 
 
 class FakeImageGenerator(BaseImageGenerator):
@@ -59,6 +63,8 @@ class FakeImageGenerator(BaseImageGenerator):
             raise ImageGenerationError("no more scripted results")
         if isinstance(item, Exception):
             raise item
+        if isinstance(item, ImageGenerationAttempt):
+            return item
         return Path(item)
 
 

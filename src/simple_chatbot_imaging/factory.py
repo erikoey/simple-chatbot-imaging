@@ -6,6 +6,7 @@ from pathlib import Path
 from simple_chatbot_imaging.base import BaseImageGenerator
 from simple_chatbot_imaging.config import _load_factory_from_config, load_provider_config
 from simple_chatbot_imaging.models import (
+    ImageGenerationAttempt,
     ImageGenerationError,
     ImageGenerationRequest,
 )
@@ -115,13 +116,15 @@ class FallbackImageGenerator(BaseImageGenerator):
     def provider_name(self) -> str:
         return "Fallback"
 
-    async def _generate_once_async(self, request: ImageGenerationRequest) -> Path:
+    async def _generate_once_async(self, request: ImageGenerationRequest) -> ImageGenerationAttempt:
         """Try each generator in the chain; return the first successful result.
 
         Each generator's public async entry point is used so retries, state
         tracking, and output movement run inside that provider. The final
         successful provider's moved output is returned; this class's own
         base-class movement then relocates it to the requested filename.
+        The winning provider's cost information and raw response JSON are
+        propagated so callers see them on the fallback result too.
         """
         errors: list[str] = []
 
@@ -140,7 +143,11 @@ class FallbackImageGenerator(BaseImageGenerator):
                 )
                 self.last_backend = generator.provider_name
                 print(f"[Fallback] image generated via {generator.provider_name}")
-                return Path(result.path)
+                return ImageGenerationAttempt(
+                    path=Path(result.path),
+                    cost=result.cost,
+                    raw_response_json=result.raw_response_json,
+                )
             except (ImageGenerationError, ValueError) as exc:
                 errors.append(f"{generator.provider_name}: {exc}")
                 print(f"[Fallback] {generator.provider_name} failed: {exc}")

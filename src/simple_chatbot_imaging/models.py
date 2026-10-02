@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 
 class ImageGenerationStatus(StrEnum):
@@ -50,6 +51,83 @@ class ImageGenerationRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageGenerationCost:
+    """Cost information reported by a provider for one generation request.
+
+    Semantics:
+
+    - ``None`` on any field means the provider did not report that
+      information (unknown, not free).
+    - ``0`` means the provider reported or the package asserts a free
+      generation (e.g. the Hugging Face provider always reports zero).
+    - A response may carry several unit types at once (credits, actual
+      currency, tokens).
+    - ``image_count`` is the number of images the provider says the request
+      produced, when reported (some APIs bill per produced image).
+    - ``raw_usage`` holds the provider's usage/cost object verbatim for
+      callers that want to interpret provider-specific fields themselves.
+
+    ``per_image_*`` tuples hold one entry per generated image, in the same
+    unit as the matching total; ``None`` when the response does not break
+    the cost down per image. Individual entries are ``None`` when the
+    response omits the value for that image.
+    """
+
+    total_credits: float | None = None
+    total_amount: float | None = None
+    currency: str | None = None
+    total_tokens: int | None = None
+    image_count: int | None = None
+    per_image_credits: tuple[float | None, ...] | None = None
+    per_image_amounts: tuple[float | None, ...] | None = None
+    per_image_tokens: tuple[int | None, ...] | None = None
+    raw_usage: Mapping[str, Any] | None = None
+
+    @classmethod
+    def zero(cls, *, image_count: int | None = None) -> ImageGenerationCost:
+        """Explicitly free generation: every monetary/token field is 0."""
+        return cls(
+            total_credits=0.0,
+            total_amount=0.0,
+            total_tokens=0,
+            image_count=image_count,
+        )
+
+    @property
+    def is_zero(self) -> bool:
+        """True when every reported cost quantity is exactly zero."""
+        reported = [
+            value
+            for value in (
+                self.total_credits,
+                self.total_amount,
+                self.total_tokens,
+            )
+            if value is not None
+        ]
+        return bool(reported) and all(value == 0 for value in reported)
+
+
+@dataclass(frozen=True, slots=True)
+class ImageGenerationAttempt:
+    """Outcome of a single provider attempt.
+
+    Providers may return this instead of a bare ``Path`` from
+    :meth:`BaseImageGenerator._generate_once_async` to surface cost
+    information extracted from the provider response. Returning a bare
+    ``Path`` is still supported and means "no cost information".
+
+    ``raw_response_json`` is the provider's JSON response body as a string
+    (or ``None`` for non-JSON responses), so callers can inspect
+    provider-specific fields themselves.
+    """
+
+    path: Path
+    cost: ImageGenerationCost | None = None
+    raw_response_json: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ImageGenerationResult:
     """Successful result of one image-generation operation."""
 
@@ -62,6 +140,8 @@ class ImageGenerationResult:
     started_at: datetime
     completed_at: datetime
     duration_seconds: float
+    cost: ImageGenerationCost | None = None
+    raw_response_json: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +159,8 @@ class ImageGenerationEvent:
     path: Path | None = None
     message: str | None = None
     error: Exception | None = None
+    cost: ImageGenerationCost | None = None
+    raw_response_json: str | None = None
 
 
 class ImageGenerationEventHandler:

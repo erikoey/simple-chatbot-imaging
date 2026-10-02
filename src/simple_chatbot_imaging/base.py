@@ -17,6 +17,7 @@ from typing import Awaitable, Callable
 global_logger = logging.getLogger(__name__)
 
 from simple_chatbot_imaging.models import (
+    ImageGenerationAttempt,
     ImageGenerationError,
     ImageGenerationEvent,
     ImageGenerationRequest,
@@ -208,6 +209,8 @@ class BaseImageGenerator(ABC):
 
         last_error: Exception | None = None
         result_path: Path | None = None
+        attempt_cost = None
+        attempt_raw_json: str | None = None
         attempts_made = 0
 
         try:
@@ -227,10 +230,20 @@ class BaseImageGenerator(ABC):
                 await self._emit_event(generating_event, on_event)
 
                 try:
-                    result_path = await asyncio.wait_for(
+                    attempt = await asyncio.wait_for(
                         self._generate_once_async(request=request),
                         timeout=self.timeout,
                     )
+                    # Providers may return a bare Path (no cost info) or an
+                    # ImageGenerationAttempt carrying cost/response payload.
+                    if isinstance(attempt, ImageGenerationAttempt):
+                        result_path = attempt.path
+                        attempt_cost = attempt.cost
+                        attempt_raw_json = attempt.raw_response_json
+                    else:
+                        result_path = attempt
+                        attempt_cost = None
+                        attempt_raw_json = None
                     last_error = None
                     break
 
@@ -364,6 +377,8 @@ class BaseImageGenerator(ABC):
                 started_at=started_at,
                 completed_at=completed_at,
                 duration_seconds=duration_seconds,
+                cost=attempt_cost,
+                raw_response_json=attempt_raw_json,
             )
 
             # Emit SUCCESS event
@@ -374,6 +389,8 @@ class BaseImageGenerator(ABC):
                 request=request,
                 occurred_at=completed_at,
                 path=img_path,
+                cost=attempt_cost,
+                raw_response_json=attempt_raw_json,
             )
             await self._emit_event(success_event, on_event)
 
@@ -459,12 +476,18 @@ class BaseImageGenerator(ABC):
     @abstractmethod
     async def _generate_once_async(self,
                                    request: ImageGenerationRequest
-                                   ) -> Path:
+                                   ) -> "Path | ImageGenerationAttempt":
         """Perform exactly one provider attempt and return a local image file.
 
         The returned path must be a regular file. The provider must clean up its
         own partial temporary files if it raises. It must not move a result into
         the configured media path; the base class performs the final placement.
+
+        Returning a bare ``Path`` is always supported and means the provider
+        reports no cost information. Returning an
+        :class:`ImageGenerationAttempt` additionally carries the cost extracted
+        from the provider response (``None``/unset fields = not reported,
+        ``0`` = free) and the raw JSON response body for caller-side parsing.
 
         Args:
             request: The generation request parameters.
@@ -476,7 +499,8 @@ class BaseImageGenerator(ABC):
             seed: Optional override for random seed.
 
         Returns:
-            Path to the generated image file on disk.
+            Path to the generated image file on disk, or an
+            ImageGenerationAttempt wrapping that path with cost metadata.
 
         Raises:
             ImageGenerationError: If generation fails.

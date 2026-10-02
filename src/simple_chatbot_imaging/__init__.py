@@ -13,6 +13,8 @@ from simple_chatbot_imaging.factory import (
     register_provider,
 )
 from simple_chatbot_imaging.models import (
+    ImageGenerationAttempt,
+    ImageGenerationCost,
     ImageGenerationError,
     ImageGenerationEvent,
     ImageGenerationRequest,
@@ -26,6 +28,8 @@ __all__ = [
     "BaseHTTPImageGenerator",
     "BaseImageGenerator",
     "FallbackImageGenerator",
+    "ImageGenerationAttempt",
+    "ImageGenerationCost",
     "ImageGenerationError",
     "ImageGenerationEvent",
     "ImageGenerationRequest",
@@ -37,4 +41,4 @@ __all__ = [
     "register_provider",
 ]
 
-__version__ = "1.0.0-beta.5"
+__version__ = "1.0.0-beta.7"

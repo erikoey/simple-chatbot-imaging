@@ -6,10 +6,14 @@ All HTTP, status-mapping, response-resolution, and temp-file handling lives in
 :class:`BaseHTTPImageGenerator`.
 """
 
-from pathlib import Path
 from typing import Any
 
-from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
+from simple_chatbot_imaging.models import (
+    ImageGenerationAttempt,
+    ImageGenerationCost,
+    ImageGenerationError,
+    ImageGenerationRequest,
+)
 from simple_chatbot_imaging.providers.http_base import BaseHTTPImageGenerator
 
 
@@ -56,7 +60,7 @@ class OpenRouterImageGenerator(BaseHTTPImageGenerator):
             "prompt": prompt,
         }
 
-    async def _generate_once_async(self, request: ImageGenerationRequest) -> Path:
+    async def _generate_once_async(self, request: ImageGenerationRequest) -> ImageGenerationAttempt:
         """Call the OpenRouter image API once and save the result to a temp file."""
         payload = self._build_payload(request)
         response = await self._post_json(self._endpoint, payload)
@@ -68,16 +72,23 @@ class OpenRouterImageGenerator(BaseHTTPImageGenerator):
                 retryable=False,
             )
 
-        self._raise_for_status(response)
-        parsed = self._parse_json(response)
-
-        try:
-            image_entry = parsed["data"][0]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise ImageGenerationError(
-                f"Unexpected OpenRouter response format: {response.text[:300]}"
-            ) from exc
-
-        image_bytes = await self._extract_image_bytes(image_entry, response)
-        suffix = self._sniff_suffix(image_bytes, response.headers.get("content-type"))
-        return self._write_temp_image(image_bytes, suffix, prefix=self._temp_prefix)
+        # OpenRouter reports usage.cost in USD plus token counts in `usage`.
+        attempt = await self._resolve_and_save(request, response)
+        if attempt.cost is not None and attempt.cost.total_amount is not None:
+            cost = ImageGenerationCost(
+                total_credits=attempt.cost.total_credits,
+                total_amount=attempt.cost.total_amount,
+                currency=attempt.cost.currency or "USD",
+                total_tokens=attempt.cost.total_tokens,
+                image_count=attempt.cost.image_count,
+                per_image_credits=attempt.cost.per_image_credits,
+                per_image_amounts=attempt.cost.per_image_amounts,
+                per_image_tokens=attempt.cost.per_image_tokens,
+                raw_usage=attempt.cost.raw_usage,
+            )
+            attempt = ImageGenerationAttempt(
+                path=attempt.path,
+                cost=cost,
+                raw_response_json=attempt.raw_response_json,
+            )
+        return attempt

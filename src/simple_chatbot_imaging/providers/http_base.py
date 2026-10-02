@@ -19,6 +19,7 @@ import base64
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +27,12 @@ import httpx
 from pydantic import SecretStr
 
 from simple_chatbot_imaging.base import BaseImageGenerator
-from simple_chatbot_imaging.models import ImageGenerationError, ImageGenerationRequest
+from simple_chatbot_imaging.models import (
+    ImageGenerationAttempt,
+    ImageGenerationCost,
+    ImageGenerationError,
+    ImageGenerationRequest,
+)
 
 
 class BaseHTTPImageGenerator(BaseImageGenerator):
@@ -45,6 +51,28 @@ class BaseHTTPImageGenerator(BaseImageGenerator):
 
     #: JSON keys that may hold a downloadable image URL in a response entry.
     URL_FIELDS: tuple[str, ...] = ("url", "image_url", "imageUrl", "image", "output_url")
+
+    #: JSON keys under which a usage/cost object may appear anywhere in the
+    #: response. The first dict found wins.
+    USAGE_FIELDS: tuple[str, ...] = ("usage", "usage_metadata", "cost_info", "billing")
+
+    #: Keys within a usage object that hold a total monetary amount.
+    AMOUNT_KEYS: tuple[str, ...] = ("cost", "total_cost", "amount", "total_amount", "price")
+
+    #: Keys within a usage object that hold a total credits consumption.
+    CREDITS_KEYS: tuple[str, ...] = (
+        "credits", "credits_consumed", "credits_used", "image_credits", "credit_cost",
+        "total_credits",
+    )
+
+    #: Keys within a usage object that hold a total token count.
+    TOKEN_KEYS: tuple[str, ...] = ("total_tokens", "tokens_used", "tokens")
+
+    #: Keys within a usage object that hold the number of produced images.
+    IMAGE_COUNT_KEYS: tuple[str, ...] = ("image_count", "images_count", "num_images", "count")
+
+    #: Keys within a usage object that hold a currency code.
+    CURRENCY_KEYS: tuple[str, ...] = ("currency", "currency_code")
 
     DEFAULT_BASE_URL = ""
     DEFAULT_MODEL = ""
@@ -297,6 +325,145 @@ class BaseHTTPImageGenerator(BaseImageGenerator):
         return image_bytes
 
     # ------------------------------------------------------------------ #
+    # Cost extraction                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _find_first_dict(self, payload: Any, keys: tuple[str, ...]) -> dict[str, Any] | None:
+        """Depth-first search for the first dict value under `keys`."""
+        if isinstance(payload, dict):
+            for key in keys:
+                value = payload.get(key)
+                if isinstance(value, dict):
+                    return value
+            for value in payload.values():
+                found = self._find_first_dict(value, keys)
+                if found is not None:
+                    return found
+        elif isinstance(payload, list):
+            for item in payload:
+                found = self._find_first_dict(item, keys)
+                if found is not None:
+                    return found
+        return None
+
+    def _first_number(self, usage: Mapping[str, Any], keys: tuple[str, ...]) -> float | None:
+        """First numeric (non-bool) value under `keys` in a usage object."""
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return value
+        return None
+
+    def _first_string(self, usage: Mapping[str, Any], keys: tuple[str, ...]) -> str | None:
+        """First non-empty string value under `keys` in a usage object."""
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return None
+
+    def _extract_per_image_costs(self, usage: Mapping[str, Any]) -> tuple[
+        tuple[float, ...] | None,
+        tuple[float, ...] | None,
+        tuple[int, ...] | None,
+    ]:
+        """Read per-image breakdowns from a usage object, when reported.
+
+        Understands either a parallel-lists shape (``per_image_costs`` /
+        ``image_costs`` / ``per_image_tokens``) or a list-of-entries shape
+        (``images``/``data``/``items`` with per-entry cost keys).
+        """
+        credits = amounts = tokens = None
+
+        for key, target in (
+            ("per_image_costs", "amount"), ("image_costs", "amount"),
+            ("per_image_credits", "credits"), ("per_image_tokens", "tokens"),
+        ):
+            value = usage.get(key)
+            if isinstance(value, list):
+                numbers = tuple(
+                    entry for entry in value
+                    if isinstance(entry, (int, float)) and not isinstance(entry, bool)
+                )
+                if numbers and len(numbers) == len(value):
+                    if target == "amount" and amounts is None:
+                        amounts = numbers
+                    elif target == "credits" and credits is None:
+                        credits = numbers
+                    elif target == "tokens" and tokens is None:
+                        tokens = numbers
+
+        if credits is None and amounts is None and tokens is None:
+            for key in ("images", "data", "items"):
+                entries = usage.get(key)
+                if not isinstance(entries, list) or not entries:
+                    continue
+                if all(isinstance(entry, Mapping) for entry in entries):
+                    per_amounts = tuple(
+                        self._first_number(entry, self.AMOUNT_KEYS) for entry in entries
+                    )
+                    per_credits = tuple(
+                        self._first_number(entry, self.CREDITS_KEYS) for entry in entries
+                    )
+                    per_tokens = tuple(
+                        self._first_number(entry, self.TOKEN_KEYS) for entry in entries
+                    )
+                    if any(value is not None for value in per_amounts):
+                        amounts = per_amounts
+                    if any(value is not None for value in per_credits):
+                        credits = per_credits
+                    if any(value is not None for value in per_tokens):
+                        tokens = per_tokens
+                break
+
+        return credits, amounts, tokens
+
+    @staticmethod
+    def _coerce_int_tuple(
+        values: tuple[float | None, ...] | None,
+    ) -> tuple[int | None, ...] | None:
+        """Int-coerce a per-image tuple, preserving None entries."""
+        if values is None:
+            return None
+        return tuple(int(value) if value is not None else None for value in values)
+
+    def _extract_cost(self, parsed: Any) -> ImageGenerationCost | None:
+        """Extract cost information from a parsed provider response.
+
+        The default implementation depth-first locates a usage/cost object
+        under :attr:`USAGE_FIELDS` and maps well-known keys for total amounts,
+        credits, tokens, image count, and per-image breakdowns. Returns
+        ``None`` when nothing usable is found (unknown cost, not free).
+        Subclasses override for exotic response shapes.
+        """
+        usage = self._find_first_dict(parsed, self.USAGE_FIELDS)
+        if usage is None:
+            return None
+
+        amount = self._first_number(usage, self.AMOUNT_KEYS)
+        credits = self._first_number(usage, self.CREDITS_KEYS)
+        tokens = self._first_number(usage, self.TOKEN_KEYS)
+        image_count = self._first_number(usage, self.IMAGE_COUNT_KEYS)
+        currency = self._first_string(usage, self.CURRENCY_KEYS)
+
+        if all(value is None for value in (amount, credits, tokens, image_count)):
+            return None
+
+        per_credits, per_amounts, per_tokens = self._extract_per_image_costs(usage)
+
+        return ImageGenerationCost(
+            total_credits=credits,
+            total_amount=amount,
+            currency=currency,
+            total_tokens=int(tokens) if tokens is not None else None,
+            image_count=int(image_count) if image_count is not None else None,
+            per_image_credits=per_credits,
+            per_image_amounts=per_amounts,
+            per_image_tokens=self._coerce_int_tuple(per_tokens),
+            raw_usage=usage,
+        )
+
+    # ------------------------------------------------------------------ #
     # Output handling                                                      #
     # ------------------------------------------------------------------ #
 
@@ -350,15 +517,32 @@ class BaseHTTPImageGenerator(BaseImageGenerator):
     # Template method                                                      #
     # ------------------------------------------------------------------ #
 
-    async def _generate_once_async(self, request: ImageGenerationRequest) -> Path:
-        """Run one provider attempt: POST, resolve, and save to a temp file."""
+    async def _generate_once_async(self, request: ImageGenerationRequest) -> ImageGenerationAttempt:
+        """Run one provider attempt: POST, resolve, and save to a temp file.
+
+        Returns an ImageGenerationAttempt carrying the cost extracted from the
+        response (``None`` when the provider reports none) plus the raw JSON
+        response body for caller-side parsing.
+        """
         payload = self._build_payload(request)
         response = await self._post_json(self._endpoint, payload)
+        return await self._resolve_and_save(request, response)
+
+    async def _resolve_and_save(
+        self, request: ImageGenerationRequest, response: httpx.Response
+    ) -> ImageGenerationAttempt:
+        """Shared post-response pipeline: status, parse, extract, save, cost."""
         self._raise_for_status(response)
         parsed = self._parse_json(response)
+        raw_response_json = response.text if response.text else None
         image_bytes = await self._extract_image_bytes(parsed, response)
         suffix = self._sniff_suffix(image_bytes, response.headers.get("content-type"))
-        return self._write_temp_image(image_bytes, suffix, prefix=self._temp_prefix)
+        path = self._write_temp_image(image_bytes, suffix, prefix=self._temp_prefix)
+        return ImageGenerationAttempt(
+            path=path,
+            cost=self._extract_cost(parsed),
+            raw_response_json=raw_response_json,
+        )
 
     @property
     def _temp_prefix(self) -> str:
