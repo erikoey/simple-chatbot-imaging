@@ -34,6 +34,15 @@ DEFAULT_PROVIDER_CONFIG: dict[str, dict[str, Any]] = {
             "request_timeout_seconds": 60,
         }
     },
+    "sdxl": {
+        "kwargs": {
+            "model": "SG161222/RealVisXL_V5.0_Lightning",
+            "vae": "madebyollin/sdxl-vae-fp16-fix",
+            "device": "cuda:0",
+            "steps": 7,
+            "guidance_scale": 1.5,
+        }
+    },
 }
 
 

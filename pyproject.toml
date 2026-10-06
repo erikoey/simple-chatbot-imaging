@@ -17,8 +17,21 @@ dependencies = [
 
 [project.optional-dependencies]
 huggingface = ["gradio-client>=1.0.0"]
+# sdxl-generator is not published to PyPI: it resolves from a local checkout
+# via [tool.uv.sources] below (consumers re-declare the source themselves).
+# The GPU runtime is multi-GB: AMD ROCm wheels on Windows (cp312 only —
+# effectively pins any venv installing this extra to Python 3.12), CUDA
+# build from the pytorch-cu128 index on Linux.
+sdxl = [
+    "sdxl-generator",
+    "torch>=2.9.0",
+    "rocm-sdk-core==7.2.1; sys_platform == 'win32'",
+    "rocm-sdk-devel==7.2.1; sys_platform == 'win32'",
+    "rocm-sdk-libraries-custom==7.2.1; sys_platform == 'win32'",
+    "rocm==7.2.1; sys_platform == 'win32'",
+]
 fallback = []  # orchestration only; install provider extras separately
-all = ["simple-chatbot-imaging[huggingface]"]
+all = ["simple-chatbot-imaging[huggingface,sdxl]"]
 
 [dependency-groups]
 dev = [
@@ -26,6 +39,24 @@ dev = [
     "pytest-asyncio>=0.26.0",
     "ruff>=0.12.0",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+# Copied from sdxl-generator's pyproject: uv source overrides do not
+# propagate through dependencies, so this package must re-declare them.
+sdxl-generator = { path = "../sdxl-generator", editable = true }
+torch = [
+    { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torch-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux'" },
+]
+rocm-sdk-core = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_core-7.2.1-py3-none-win_amd64.whl", marker = "sys_platform == 'win32'" }
+rocm-sdk-devel = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_devel-7.2.1-py3-none-win_amd64.whl", marker = "sys_platform == 'win32'" }
+rocm-sdk-libraries-custom = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_libraries_custom-7.2.1-py3-none-win_amd64.whl", marker = "sys_platform == 'win32'" }
+rocm = { url = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm-7.2.1.tar.gz", marker = "sys_platform == 'win32'" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/simple_chatbot_imaging"]

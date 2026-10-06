@@ -113,6 +113,18 @@ gen = create_image_generator(
 - Uses `HUGGINGFACE_ACCESS_TOKEN` if set.
 - Options: `space_id` (default `hugging-apps/qwen-image-2-1`), `hf_token_env`.
 
+### SDXL (`sdxl`, extra: `sdxl`)
+
+- Local generation on this machine's GPU through `sdxl-generator`
+  (AMD ROCm wheels on Windows, CUDA build on Linux; multi-GB install).
+- No endpoint or API key; calls are serialized with a process-wide lock
+  and run off the event loop via `asyncio.to_thread`.
+- Options: `model` (default `SG161222/RealVisXL_V5.0_Lightning`), `vae`
+  (default `madebyollin/sdxl-vae-fp16-fix`; `None` uses the VAE baked
+  into the model checkpoint), `device` (default `cuda:0`), `steps`
+  (default `7`), `guidance_scale` (default `1.5`).
+- Reports an explicitly free generation (no metered API).
+
 ## Custom HTTP providers
 
 OpenRouter and Qwen share a common base class,

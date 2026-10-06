@@ -39,9 +39,15 @@ def _load_qwen(**kwargs) -> BaseImageGenerator:
     return QwenImageGenerator(**kwargs)
 
 
+def _load_sdxl(**kwargs) -> BaseImageGenerator:
+    from simple_chatbot_imaging.providers.sdxl import SdxlImageGenerator
+    return SdxlImageGenerator(**kwargs)
+
+
 PROVIDERS["openrouter"] = _load_openrouter
 PROVIDERS["huggingface"] = _load_huggingface
 PROVIDERS["qwen"] = _load_qwen
+PROVIDERS["sdxl"] = _load_sdxl
 
 
 def register_provider(name: str, factory: Callable[..., BaseImageGenerator]) -> None:
